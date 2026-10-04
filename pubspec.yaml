@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cunning_document_scanner: ^1.4.1
+  cunning_document_scanner: ^3.0.3
   pdf: ^3.10.8
   printing: ^5.13.1
   path_provider: ^2.1.2
