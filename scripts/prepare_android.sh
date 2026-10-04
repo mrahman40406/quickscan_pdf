@@ -43,10 +43,15 @@ for gradle_path in glob.glob("android/app/build.gradle*"):
     g = g.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
     g = g.replace("minSdk flutter.minSdkVersion", "minSdk 21")
 
-    # Ensure compileSdkVersion is 34
-    g = g.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 34")
-    g = g.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 34")
-    g = g.replace("compileSdk flutter.compileSdkVersion", "compileSdk 34")
+    # Ensure compileSdkVersion is 36 (required by shared_preferences_android)
+    g = g.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+    g = g.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+    g = g.replace("compileSdk flutter.compileSdkVersion", "compileSdk 36")
+
+    # Ensure targetSdkVersion is 36
+    g = g.replace("targetSdkVersion flutter.targetSdkVersion", "targetSdkVersion 36")
+    g = g.replace("targetSdk = flutter.targetSdkVersion", "targetSdk = 36")
+    g = g.replace("targetSdk flutter.targetSdkVersion", "targetSdk 36")
 
     # Enable multidex with correct syntax for Groovy vs Kotlin DSL
     if "multiDexEnabled" not in g:
