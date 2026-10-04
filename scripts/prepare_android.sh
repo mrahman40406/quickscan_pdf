@@ -48,10 +48,11 @@ for gradle_path in glob.glob("android/app/build.gradle*"):
     g = g.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 34")
     g = g.replace("compileSdk flutter.compileSdkVersion", "compileSdk 34")
 
-    # Enable multidex
+    # Enable multidex with correct syntax for Groovy vs Kotlin DSL
     if "multiDexEnabled" not in g:
         if "defaultConfig {" in g:
-            g = g.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled true")
+            multidex_line = "        multiDexEnabled = true" if gradle_path.endswith(".kts") else "        multiDexEnabled true"
+            g = g.replace("defaultConfig {", f"defaultConfig {{\n{multidex_line}")
 
     with open(gradle_path, "w", encoding="utf-8") as f:
         f.write(g)
