@@ -29,27 +29,7 @@ jobs:
           cache: true
 
       - name: Generate Clean Android Platform Files
-        run: |
-          rm -rf android
-          flutter create . --platforms=android --org=com.quickscan
-          python3 -c '
-import os
-path = "android/app/src/main/AndroidManifest.xml"
-if os.path.exists(path):
-    with open(path, "r") as f:
-        content = f.read()
-    permissions = """
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-"""
-    if "<application" in content and "android.permission.CAMERA" not in content:
-        content = content.replace("<application", permissions + "\n    <application", 1)
-        with open(path, "w") as f:
-            f.write(content)
-'
+        run: bash scripts/prepare_android.sh
 
       - name: Get Dependencies
         run: flutter pub get
