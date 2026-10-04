@@ -31,9 +31,10 @@ if os.path.exists(manifest_path):
         f.write(content)
     print("Permissions and tools namespace injected into AndroidManifest.xml")
 
-# 2. Update android/app/build.gradle
-gradle_path = "android/app/build.gradle"
-if os.path.exists(gradle_path):
+# 2. Update android/app/build.gradle or build.gradle.kts
+import glob
+
+for gradle_path in glob.glob("android/app/build.gradle*"):
     with open(gradle_path, "r", encoding="utf-8") as f:
         g = f.read()
 
@@ -49,11 +50,12 @@ if os.path.exists(gradle_path):
 
     # Enable multidex
     if "multiDexEnabled" not in g:
-        g = g.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled true")
+        if "defaultConfig {" in g:
+            g = g.replace("defaultConfig {", "defaultConfig {\n        multiDexEnabled true")
 
     with open(gradle_path, "w", encoding="utf-8") as f:
         f.write(g)
-    print("Updated build.gradle with minSdk 21, compileSdk 34, and multiDexEnabled true")
+    print(f"Updated {gradle_path} with minSdk 21, compileSdk 34, and multiDex")
 EOF
 
 echo "==> Android platform preparation complete."

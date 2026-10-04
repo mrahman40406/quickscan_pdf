@@ -28,7 +28,7 @@ class AppTheme {
           letterSpacing: -0.5,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 1,
         shadowColor: Colors.black.withOpacity(0.06),
         shape: RoundedRectangleBorder(
@@ -87,7 +87,7 @@ class AppTheme {
           letterSpacing: -0.5,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 2,
         shadowColor: Colors.black.withOpacity(0.3),
         shape: RoundedRectangleBorder(

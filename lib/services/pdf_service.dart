@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider';
-import 'package:pdf/pdf.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart' hide PdfDocument;
 import 'package:pdf/widgets.dart' as pw;
 import '../models/pdf_document.dart';
 
