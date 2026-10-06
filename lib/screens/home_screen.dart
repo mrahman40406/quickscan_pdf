@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/pdf_document.dart';
 import '../services/scanner_service.dart';
 import '../services/pdf_service.dart';
@@ -50,6 +51,43 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _processScannedImages(List<String> imagePaths) async {
+    if (imagePaths.isEmpty) return;
+    setState(() => _isProcessing = true);
+    try {
+      final defaultName =
+          'Doc_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
+
+      final doc = await PdfService.createPdfFromImages(
+        imagePaths: imagePaths,
+        customTitle: defaultName,
+      );
+
+      await StorageService.saveDocument(doc);
+      await _loadDocuments();
+
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => PdfPreviewScreen(document: doc),
+          ),
+        ).then((_) => _loadDocuments());
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating PDF: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _startScan({bool allowGallery = true}) async {
     try {
       final imagePaths = await ScannerService.scanDocuments(
@@ -61,43 +99,227 @@ class _HomeScreenState extends State<HomeScreen> {
         return; // User cancelled
       }
 
-      setState(() => _isProcessing = true);
-
-      // Ask for document name or use default
+      await _processScannedImages(imagePaths);
+    } on ScannerPermissionException catch (e) {
       if (!mounted) return;
-      final defaultName =
-          'Doc_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
-
-      // Create PDF
-      final doc = await PdfService.createPdfFromImages(
-        imagePaths: imagePaths,
-        customTitle: defaultName,
-      );
-
-      await StorageService.saveDocument(doc);
-      await _loadDocuments();
-
-      setState(() => _isProcessing = false);
-
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (ctx) => PdfPreviewScreen(document: doc),
-          ),
-        ).then((_) => _loadDocuments());
-      }
-    } catch (e) {
-      setState(() => _isProcessing = false);
-      if (mounted) {
+      if (e.isPermanentlyDenied) {
+        _showPermissionSettingsDialog();
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error creating PDF: $e'),
-            backgroundColor: Colors.redAccent,
+            content: Text(e.message),
+            backgroundColor: Colors.orange.shade800,
           ),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      // Auto document scanner failed on device (e.g. ML Kit / Play Services issue)
+      _showScannerFallbackDialog(e.toString());
     }
+  }
+
+  Future<void> _captureWithCamera() async {
+    try {
+      final imagePaths = await ScannerService.captureWithCamera();
+      if (imagePaths == null || imagePaths.isEmpty) return;
+      await _processScannedImages(imagePaths);
+    } on ScannerPermissionException catch (e) {
+      if (!mounted) return;
+      if (e.isPermanentlyDenied) {
+        _showPermissionSettingsDialog();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Colors.orange.shade800,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening camera: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final imagePaths = await ScannerService.pickFromGallery();
+      if (imagePaths == null || imagePaths.isEmpty) return;
+      await _processScannedImages(imagePaths);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error selecting images: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  void _showPermissionSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.camera_alt, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Camera Permission'),
+          ],
+        ),
+        content: const Text(
+          'Camera permission is required to scan documents and take photos. Please enable Camera access in App Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showScannerFallbackDialog(String error) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('Scanner Options'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The auto document scanner could not launch on this device (Google ML Kit may require Google Play Services or an active internet connection on first run).',
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Would you like to take photos with your camera or import images from your gallery to create your PDF?',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _pickFromGallery();
+            },
+            icon: const Icon(Icons.photo_library, size: 18),
+            label: const Text('Gallery'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _captureWithCamera();
+            },
+            icon: const Icon(Icons.camera_alt, size: 18),
+            label: const Text('Camera'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showScanOptionsModal() {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  'Add Documents',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  child: Icon(
+                    Icons.document_scanner,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                title: const Text(
+                  'Auto Document Scanner',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('Auto edge detection, crop & enhance'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _startScan();
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.blue.shade50,
+                  child: const Icon(Icons.camera_alt, color: Colors.blue),
+                ),
+                title: const Text(
+                  'Standard Camera',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('Take photos directly with device camera'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _captureWithCamera();
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.purple.shade50,
+                  child: const Icon(Icons.photo_library, color: Colors.purple),
+                ),
+                title: const Text(
+                  'Import from Gallery',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('Pick existing photos or documents'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickFromGallery();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _confirmDelete(PdfDocument doc) {
@@ -200,6 +422,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.photo_library_outlined),
+            tooltip: 'Import from Gallery',
+            onPressed: _isProcessing ? null : _pickFromGallery,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh list',
             onPressed: _loadDocuments,
@@ -262,26 +489,37 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: _isProcessing ? null : () => _startScan(),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: theme.colorScheme.primary,
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          const SizedBox(width: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: _isProcessing ? null : () => _startScan(),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: theme.colorScheme.primary,
+                                  elevation: 2,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                ),
+                                icon: const Icon(Icons.camera_alt, size: 18),
+                                label: const Text(
+                                  'Scan',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
+                              const SizedBox(width: 4),
+                              IconButton(
+                                onPressed: _isProcessing ? null : _showScanOptionsModal,
+                                icon: const Icon(Icons.more_vert, color: Colors.white),
+                                tooltip: 'Scan options',
                               ),
-                            ),
-                            icon: const Icon(Icons.camera_alt, size: 18),
-                            label: const Text(
-                              'Scan',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            ],
                           ),
                         ],
                       ),
@@ -370,9 +608,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isProcessing ? null : () => _startScan(),
+        onPressed: _isProcessing ? null : _showScanOptionsModal,
         icon: const Icon(Icons.document_scanner),
-        label: const Text('Auto Scan'),
+        label: const Text('Scan / Import'),
       ),
     );
   }
@@ -567,20 +805,40 @@ class _HomeScreenState extends State<HomeScreen> {
                 height: 1.4,
               ),
             ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: () => _startScan(),
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Start First Scan'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
+            Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _startScan(),
+                  icon: const Icon(Icons.document_scanner),
+                  label: const Text('Auto Scan'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                OutlinedButton.icon(
+                  onPressed: () => _pickFromGallery(),
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('From Gallery'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

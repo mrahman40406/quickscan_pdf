@@ -20,6 +20,19 @@ if os.path.exists(manifest_path):
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.PICK" />
+        </intent>
+    </queries>
 """
     if "android.permission.CAMERA" not in content and "<application" in content:
         content = content.replace("<application", permissions + "    <application", 1)
@@ -38,10 +51,10 @@ for gradle_path in glob.glob("android/app/build.gradle*"):
     with open(gradle_path, "r", encoding="utf-8") as f:
         g = f.read()
 
-    # Ensure minSdkVersion is at least 21
-    g = g.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
-    g = g.replace("minSdk = flutter.minSdkVersion", "minSdk = 21")
-    g = g.replace("minSdk flutter.minSdkVersion", "minSdk 21")
+    # Ensure minSdkVersion is at least 24 (required by cunning_document_scanner)
+    g = g.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 24")
+    g = g.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
+    g = g.replace("minSdk flutter.minSdkVersion", "minSdk 24")
 
     # Ensure compileSdkVersion is 36 (required by shared_preferences_android)
     g = g.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
@@ -61,7 +74,7 @@ for gradle_path in glob.glob("android/app/build.gradle*"):
 
     with open(gradle_path, "w", encoding="utf-8") as f:
         f.write(g)
-    print(f"Updated {gradle_path} with minSdk 21, compileSdk 34, and multiDex")
+    print(f"Updated {gradle_path} with minSdk 24, compileSdk 36, and multiDex")
 EOF
 
 echo "==> Android platform preparation complete."
